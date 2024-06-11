@@ -3,7 +3,7 @@
 
 ### Default target ###
 
-default: all
+default: res
 
 ### Build Options ###
 
@@ -165,12 +165,12 @@ VERSION_CFLAGS := -D$(VERSION_DEF) -D_LANGUAGE_C
 VERSION_ASFLAGS := --defsym $(VERSION_DEF)=1
 
 # Stuff for showing the git hash in the title bar
-GIT_HASH := $(shell git rev-parse --short HEAD)
+GIT_HASH := unknown
 VERSION_CFLAGS += -DGIT_HASH="\"$(GIT_HASH)\""
 
-ifeq ($(shell git rev-parse --abbrev-ref HEAD),nightly)
-  VERSION_CFLAGS += -DNIGHTLY
-endif
+#ifeq ($(shell git rev-parse --abbrev-ref HEAD),nightly)
+#  VERSION_CFLAGS += -DNIGHTLY
+#endif
 
 GRUCODE_DEF := F3DEX_GBI_2E
 TARGET := $(TARGET).f3dex2e
@@ -433,6 +433,15 @@ TEXTS_COPY_RES := \
 
 TEXTS_BUILD_RES := $(shell $(call TEXTS_COPY_RES))
 
+# Copy the demo files
+DEMO_IN_RES_DIR := ./assets/demos
+DEMO_OUT_RES_DIR := $(BUILD_DIR)/$(BASEDIR)/demos
+DEMO_COPY_RES := \
+    mkdir -p $(DEMO_OUT_RES_DIR); \
+    cp $(DEMO_IN_RES_DIR)/* $(DEMO_OUT_RES_DIR);
+
+DEMO_BUILD_RES := $(shell $(call DEMO_COPY_RES))
+
 ##################### Compiler Options #######################
 INCLUDE_CFLAGS := $(PLATFORM_CFLAGS) -I include -I $(BUILD_DIR) -I $(BUILD_DIR)/include -I src -I .
 ENDIAN_BITWIDTH := $(BUILD_DIR)/endian-and-bitwidth
@@ -543,16 +552,6 @@ endif
 
 ifneq (,$(findstring SDL,$(CONTROLLER_API)))
   SDL_USED := 2
-endif
-
-# SDL can be used by different systems, so we consolidate all of that shit into this
-ifeq ($(SDL_USED),2)
-  BACKEND_CFLAGS += -DHAVE_SDL2=1 $(shell $(SDLCONFIG) --cflags)
-  ifeq ($(WINDOWS_BUILD),1)
-    BACKEND_LDFLAGS += $(shell $(SDLCONFIG) --static-libs) -lsetupapi -luser32 -limm32 -lole32 -loleaut32 -lshell32 -lwinmm -lversion
-  else
-    BACKEND_LDFLAGS += $(shell $(SDLCONFIG) --libs)
-  endif
 endif
 
 ifeq ($(WINDOWS_BUILD),1)
@@ -690,17 +689,17 @@ BASEPACK_LST := $(BUILD_DIR)/basepack.lst
 ifneq ($(NO_COPY),1)
 
 # depend on resources as well
-all: $(BASEPACK_PATH)
+#all: $(BASEPACK_PATH)
 
 # phony target for building resources
 res: $(BASEPACK_PATH)
 
 # prepares the basepack.lst
 ifneq ($(SKIP_BASEPACK),1)
-$(BASEPACK_LST): $(EXE)
+$(BASEPACK_LST): $(SOUND_BIN_DIR)/bank_sets $(SOUND_BIN_DIR)/sound_data.ctl $(SOUND_BIN_DIR)/sound_data.tbl $(SOUND_BIN_DIR)/sequences.bin
 	@mkdir -p $(BUILD_DIR)/$(BASEDIR)
 	@touch $(BASEPACK_LST)
-	@echo "$(BUILD_DIR)/sound/bank_sets sound/bank_sets" >> $(BASEPACK_LST)
+	@echo "$(BUILD_DIR)/sound/bank_sets sound/bank_sets" > $(BASEPACK_LST)
 	@echo "$(BUILD_DIR)/sound/sequences.bin sound/sequences.bin" >> $(BASEPACK_LST)
 	@echo "$(BUILD_DIR)/sound/sound_data.ctl sound/sound_data.ctl" >> $(BASEPACK_LST)
 	@echo "$(BUILD_DIR)/sound/sound_data.tbl sound/sound_data.tbl" >> $(BASEPACK_LST)
@@ -745,7 +744,9 @@ $(BUILD_DIR)/src/game/crash_screen.o: $(CRASH_TEXTURE_C_FILES)
 $(BUILD_DIR)/lib/rsp.o: $(BUILD_DIR)/rsp/rspboot.bin $(BUILD_DIR)/rsp/fast3d.bin $(BUILD_DIR)/rsp/audio.bin
 
 RSP_DIRS := $(BUILD_DIR)/rsp
-ALL_DIRS := $(BUILD_DIR) $(addprefix $(BUILD_DIR)/,$(SRC_DIRS) $(ASM_DIRS) $(GODDARD_SRC_DIRS) $(ULTRA_SRC_DIRS) $(ULTRA_ASM_DIRS) $(ULTRA_BIN_DIRS) $(BIN_DIRS) $(TEXTURE_DIRS) $(SOUND_SAMPLE_DIRS) $(addprefix levels/,$(LEVEL_DIRS)) include) $(MIO0_DIR) $(addprefix $(MIO0_DIR)/,$(VERSION)) $(SOUND_BIN_DIR) $(SOUND_BIN_DIR)/sequences/$(VERSION) $(RSP_DIRS)
+ALL_DIRS := $(BUILD_DIR) $(addprefix $(BUILD_DIR)/,$(ASM_DIRS) $(SOUND_SAMPLE_DIRS)) $(SOUND_BIN_DIR) $(SOUND_BIN_DIR)/sequences/$(VERSION) 
+#ALL_DIRS := $(BUILD_DIR) $(addprefix $(BUILD_DIR)/,$(SRC_DIRS) $(ASM_DIRS) $(GODDARD_SRC_DIRS) $(ULTRA_SRC_DIRS) $(ULTRA_ASM_DIRS) $(ULTRA_BIN_DIRS) $(BIN_DIRS) $(TEXTURE_DIRS) $(SOUND_SAMPLE_DIRS) $(addprefix levels/,$(LEVEL_DIRS)) include) $(MIO0_DIR) $(addprefix $(MIO0_DIR)/,$(VERSION)) $(SOUND_BIN_DIR) $(SOUND_BIN_DIR)/sequences/$(VERSION) $(RSP_DIRS)
+
 
 # Make sure build directory exists before compiling anything
 DUMMY != mkdir -p $(ALL_DIRS)
@@ -761,12 +762,19 @@ $(BUILD_DIR)/%.aifc: $(BUILD_DIR)/%.table %.aiff
 $(BUILD_DIR)/rsp/%.bin $(BUILD_DIR)/rsp/%_data.bin: rsp/%.s
 	$(RSPASM) -sym $@.sym -definelabel $(VERSION_DEF) 1 -definelabel $(GRUCODE_DEF) 1 -strequ CODE_FILE $(BUILD_DIR)/rsp/$*.bin -strequ DATA_FILE $(BUILD_DIR)/rsp/$*_data.bin $<
 
-$(ENDIAN_BITWIDTH): tools/determine-endian-bitwidth.c
-	$(CC) -c $(CFLAGS) -o $@.dummy2 $< 2>$@.dummy1; true
-	grep -o 'msgbegin --endian .* --bitwidth .* msgend' $@.dummy1 > $@.dummy2
-	head -n1 <$@.dummy2 | cut -d' ' -f2-5 > $@
-	@rm $@.dummy1
-	@rm $@.dummy2
+#$(ENDIAN_BITWIDTH): tools/determine-endian-bitwidth.c
+#	$(CC) -c $(CFLAGS) -o $@.dummy2 $< 2>$@.dummy1; true
+#	grep -o 'msgbegin --endian .* --bitwidth .* msgend' $@.dummy1 > $@.dummy2
+#	head -n1 <$@.dummy2 | cut -d' ' -f2-5 > $@
+#	@rm $@.dummy1
+#	@rm $@.dummy2
+
+$(ENDIAN_BITWIDTH):
+	echo -n '--endian ' > $@
+	lscpu | grep 'Byte Order' | grep 'Little' 2>&1 > /dev/null && echo -n 'little' >> $@ || echo -n 'big' >> $@
+	echo -n ' --bitwidth ' >> $@
+	lscpu | grep 'CPU op-mode' | grep '64-bit' 2>&1 > /dev/null && echo '64' >> $@ || echo '32' >> $@
+
 
 $(SOUND_BIN_DIR)/sound_data.ctl: sound/sound_banks/ $(SOUND_BANK_FILES) $(SOUND_SAMPLE_AIFCS) $(ENDIAN_BITWIDTH)
 	$(PYTHON) tools/assemble_sound.py $(BUILD_DIR)/sound/samples/ sound/sound_banks/ $(SOUND_BIN_DIR)/sound_data.ctl $(SOUND_BIN_DIR)/sound_data.tbl $(VERSION_CFLAGS) $$(cat $(ENDIAN_BITWIDTH))
@@ -786,8 +794,17 @@ $(SOUND_BIN_DIR)/%.m64: $(SOUND_BIN_DIR)/%.o
 $(SOUND_BIN_DIR)/%.o: $(SOUND_BIN_DIR)/%.s
 	$(AS) $(ASFLAGS) -o $@ $<
 
-$(SOUND_BIN_DIR)/%.inc.c: $(SOUND_BIN_DIR)/%
-	$(ZEROTERM) "$(patsubst $(BUILD_DIR)/%,%,$^)" | hexdump -v -e '1/1 "0x%X,"' > $@
+$(SOUND_BIN_DIR)/sound_data.ctl.inc.c:
+	$(ZEROTERM) "sound/sound_data.ctl" | hexdump -v -e '1/1 "0x%X,"' > $@
+
+$(SOUND_BIN_DIR)/sound_data.tbl.inc.c:
+	$(ZEROTERM) "sound/sound_data.tbl" | hexdump -v -e '1/1 "0x%X,"' > $@
+
+$(SOUND_BIN_DIR)/sequences.bin.inc.c:
+	$(ZEROTERM) "sound/sequences.bin" | hexdump -v -e '1/1 "0x%X,"' > $@
+
+$(SOUND_BIN_DIR)/bank_sets.inc.c:
+	$(ZEROTERM) "sound/bank_sets" | hexdump -v -e '1/1 "0x%X,"' > $@
 
 $(SOUND_BIN_DIR)/sound_data.o: $(SOUND_BIN_DIR)/sound_data.ctl.inc.c $(SOUND_BIN_DIR)/sound_data.tbl.inc.c $(SOUND_BIN_DIR)/sequences.bin.inc.c $(SOUND_BIN_DIR)/bank_sets.inc.c
 
@@ -806,7 +823,7 @@ $(BUILD_DIR)/assets/wario_anim_data.c: $(wildcard assets/wario_anims/*.inc.c)
 	$(PYTHON) tools/wario_anims_converter.py > $@
 
 $(BUILD_DIR)/assets/demo_data.c: assets/demo_data.json $(wildcard assets/demos/*.bin)
-	$(PYTHON) tools/demo_data_converter.py assets/demo_data.json $(VERSION_CFLAGS) > $@
+	$(PYTHON) tools/demo_data_converter.py assets/demo_data.json assets.json $(VERSION_CFLAGS) > $@
 
 # Source code
 $(BUILD_DIR)/levels/%/leveldata.o: OPT_FLAGS := -g
