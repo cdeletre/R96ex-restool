@@ -12,16 +12,18 @@ RESTOOL_BIN="bin"
 RESTOOL_LIB="lib"
 
 # Main sources for building and assembling the ressources
-MAIN_ZIP="main.zip"
 MAIN_DIR="main"
 
 # This is were the ressources will be built and assembled
 BUILD_DIR="${RESTOOL_ROOT}/${MAIN_DIR}/build/us_pc"
 
 # Where we put build log
-BUILD_LOG="${RESTOOL_ROOT}/build.log"
+BUILD_LOG="${ROOT_PATH}/restool-build.log"
 
-# Path to compressed ackages (zip / mp3)
+# Where we put mpg123 log
+MPG123_LOG="${ROOT_PATH}/mpg123.log"
+
+# Path to compressed packages (zip / mp3)
 PACKAGES_DIR="packages"
 
 # Ressources stuffs
@@ -64,26 +66,6 @@ echo "$0: Okey dokey! baserom.${VERSION}.z64 file is present. Installation of re
 
 echo "$0: Here we go!"
 
-if [ ! -d ${MAIN_DIR} ]
-then
-
-  echo "$0: Inflating main sources"
-  echo "$0: (EXEC) unzip ${MAIN_ZIP}"
-
-  # unzip main sources
-  unzip ${MAIN_ZIP}
-
-  if [ ! $? -eq 0 ]
-  then
-    echo "$0: An error occured while extracting main sources from ${MAIN_ZIP}"
-
-    echo "$0: Will stop here"
-    rm -rf ${MAIN_DIR}
-    exit 0
-  fi
-
-fi
-
 echo "$0: Let clean the workspace just in case"
 
 echo "$0: (EXEC) make distclean"
@@ -92,10 +74,11 @@ date >> ${BUILD_LOG}
 
 cd "${MAIN_DIR}"
 
-make distclean >> ${BUILD_LOG}
+make distclean 2>&1 >> ${BUILD_LOG}
 
-echo "$0: (EXEC) mv \"${ROOT_PATH}/baserom.${VERSION}.z64\" ."
-mv "${ROOT_PATH}/baserom.${VERSION}.z64" .
+# We make a copy of the ROM
+echo "$0: (EXEC) cp \"${ROOT_PATH}/baserom.${VERSION}.z64\" ."
+cp "${ROOT_PATH}/baserom.${VERSION}.z64" .
 
 # We run manually the asset extraction script (Makefile can do it) because we 
 # want to watch the result of this step before going any further
@@ -105,31 +88,26 @@ echo "$0: (EXEC) ./extract_assets.py us"
 if [ ! $? -eq 0 ]
 then
   echo "$0: Oh, no! Extraction of the assets from the rom has failed"
-  echo -n "$0: check that sha1 of baserom.us.z64 is"
-  cat sm64.us.sha1 | cut -d' ' -f1
-
-  # We rename the file to indicate there is an issue and we don't want to run the extraction process
-  echo "$0: (EXEC) mv \"baserom.${VERSION}.z64\" \"${ROOT_PATH}/baserom.${VERSION}.z64.NOK\""
-  mv "baserom.$VERSION.z64" "${ROOT_PATH}/baserom.$VERSION.z64.NOK"
+  romsha1=`cat sm64.us.sha1 | cut -d' ' -f1`
+  echo -n "$0: check that sha1 of baserom.us.z64 is ${romsha1}"
 
   echo "$0: Game over! Will stop here"
+
+  text_viewer -e -f 25 -w -t "Error" -m "Oh, no! Asset extraction from baserom.${VERSION}.z64 has failed. Please check that SHA1 of baserom.${VERSION}.z64 is ${romsha1} and see log for details."
   exit 1
 fi
-
-# We put back the rom but we rename it because we don't want to extract it again
-echo "$0: (EXEC) mv \"baserom.$VERSION.z64\" \"${ROOT_PATH}/baserom.$VERSION.z64.EXTRACTED\""
-mv "baserom.$VERSION.z64" "${ROOT_PATH}/baserom.$VERSION.z64.EXTRACTED"
 
 echo "$0: Yahoo! Assets have been extracted from the rom, let's build and assemble the ressources"
 echo "$0: (EXEC) make res"
 
-make res  >> ${BUILD_LOG}
+make res  2>&1 >> ${BUILD_LOG}
 
 if [ ! $? -eq 0 ]
 then
   echo "$0: Oh, no! An error occured while building and assembling the ressources"
 
   echo "$0: Game over! Will stop here"
+  text_viewer -e -f 25 -w -t "Error" -m "Oh, no! The build of the ressources has failed. Please see log for details."
   exit 1
 fi
 
@@ -157,15 +135,29 @@ do
     echo "$0: Oh, no! An error occured while installing ${ressource}"
 
     echo "$0: Game over! Will stop here"
+
+    text_viewer -e -f 25 -w -t "Error" -m "Oh, no! An error occured while installing the ressource ${ressource}. Please see log for details."
     exit 1
   fi
 
 done
 
+# We put back the rom but we rename it because we don't want to extract and install the ressouces again
+echo "$0: (EXEC) \"${ROOT_PATH}/baserom.$VERSION.z64\" \"${ROOT_PATH}/baserom.$VERSION.z64.INSTALLED\""
+mv "${ROOT_PATH}/baserom.$VERSION.z64" "${ROOT_PATH}/baserom.$VERSION.z64.INSTALLED"
+
 echo "$0: let's see if we have zip or mp3 packages to install"
 
 for respack in ${PACKAGES_DIR}/${RES_DIR}/*.zip
 do
+  text_viewer -y -f 25 -w -t "${respack}" -m "Do you want to install the optionnal ressource ${respack} ?"
+
+  if [ $? -eq 0 ]
+  then
+    # we skip this ressource
+    continue
+  fi
+
   ressource="$(basename ${respack} .zip)"
 
   if [ -f "$ROOT_PATH/$RES_DIR/$ressource" ] || [ -d "$ROOT_PATH/$RES_DIR/$ressource" ]
@@ -180,15 +172,24 @@ do
 
   if [ ! $? -eq 0 ]
   then
-    echo "$0: Oh, no! An error occured while unpacking ${ressource}.zip"
-
+    echo "$0: Oh, no! An error occured while unpacking ${respack}"
     echo "$0: Game over! Will stop here"
-    exit 1
+
+    text_viewer -e -f 25 -w -t "Error" -m "Oh, no! An error occured while installing the optionnal ressource ${respack}. Please see log for details."
   fi
 done
 
 for dynospack in ${PACKAGES_DIR}/${DYNOS_DIR}/*
 do
+
+  text_viewer -y -f 25 -w -t "${dynospack}" -m "Do you want to install the optionnal dynos pack ${dynospack} ?"
+
+  if [ $? -eq 0 ]
+  then
+    # we skip this pack
+    continue
+  fi
+
   zip=`[[ "$dynospack" =~ ".zip" ]] && echo 1 || echo 0`
   mp3=`[[ "$dynospack" =~ ".mp3" ]] && echo 1 || echo 0`
   audio=`[[ "$dynospack" =~ "audio" ]] && echo 1 || echo 0`
@@ -211,15 +212,13 @@ do
       rm -f mp3.nok
       find . -iname '*.txt' -exec cp {} "${ROOT_PATH}/${DYNOS_DIR}/${dynospack}/{}" \;
       find . -type d -exec mkdir -p "${ROOT_PATH}/${DYNOS_DIR}/${dynospack}/{}" \;
-      find . -iname '*.mp3' -exec sh -c 'mpg123 -q -w "$2/${1%.*}.wav" "$1" || touch mp3.nok' sh {} "${ROOT_PATH}/${DYNOS_DIR}/${dynospack}" \; 2>&1 > mpg123.log
+      find . -iname '*.mp3' -exec sh -c 'mpg123 -q -w "$2/${1%.*}.wav" "$1" || touch mp3.nok' sh {} "${ROOT_PATH}/${DYNOS_DIR}/${dynospack}" \; 2>&1 > ${MPG123_LOG}
       
       if [ -f "mp3.nok" ]
       then
         rm -f mp3.nok
         echo "$0: Oh, no! An error occured while unpacking ${dynospack}.mp3"
-
-        echo "$0: Game over! Will stop here"
-        exit 1
+        text_viewer -e -f 25 -w -t "Error" -m "Oh, no! An error occured while unpacking ${dynospack}.mp3. Please see log for details."
       fi
 
       cd ${RESTOOL_ROOT}
@@ -232,9 +231,7 @@ do
       if [ ! $? -eq 1 ]
       then
         echo "$0: Oh, no! An error occured while installing ${dynospack}"
-
-        echo "$0: Game over! Will stop here"
-        exit 1
+        text_viewer -e -f 25 -w -t "Error" -m "Oh, no! An error occured while installing ${dynospack}. Please see log for details."
       fi
 
     fi
@@ -258,9 +255,7 @@ do
       if [ ! $? -eq 0 ]
       then
         echo "$0: Oh, no! An error occured while unpacking ${pack}.zip"
-
-        echo "$0: Game over! Will stop here"
-        exit 1
+        text_viewer -e -f 25 -w -t "Error" -m "Oh, no! An error occured while unpacking ${dynospack}.zip. Please see log for details."
       fi
     fi
   
@@ -268,4 +263,5 @@ do
 
 done
 
-echo "$0: Yahoo! The ressources and packs have been installed."
+echo "$0: Yahoo! The ressources and packs have been installed. Let's-a go!"
+text_viewer -f 25 -w -t "Ressources installed" -m "Yahoo! The ressources and packs have been installed. Let's-a go!"

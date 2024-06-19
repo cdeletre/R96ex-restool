@@ -13,7 +13,7 @@ The script to be called is `install-res.sh`
 
 # How does it work ?
 
-Important note: after a full installation has been performed the game folder will be approximatly 1.5GB. However if you are satisfied with the installion and you game is running fine you can delete the `main` folder which will save about 800 MB. However there is no `main.zip` the tool won't be able to restore it when needed. You'll have either to copy back a fresh `main` folder or a `main.zip`
+Important note: after a full installation has been performed the game folder will be approximatly 1.5GB. However if you are satisfied with the installion and you game is running fine you can delete the `restool` folder which will save about 800 MB.
 
 The main steps are:
 
@@ -25,7 +25,7 @@ The main steps are:
 
 At any step, if anything goes wrong it stops.
 
-If the installation process ends well `baserom.us.z64` is renamed to `baserom.us.z64_EXTRACTED` else to `baserom.us.z64_NOK`.
+If the installation process ends well `baserom.us.z64` is renamed to `baserom.us.z64_INSTALLED`.
 
 To restart the installation process (ressources and/or packages) on next launch just rename again the rom to `baserom.us.z64`.
 
